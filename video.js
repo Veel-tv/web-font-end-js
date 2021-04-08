@@ -176,6 +176,8 @@ player.on('playing', event => {
   console.log("on play: ")
   $("video").removeClass("player-loading");
   var totalViewers = (torrentData.numPeers - dedicatedSeedersCount) + 1;
+  if (totalViewers < 1) 
+    totalViewers = 1;
   $("#live-vid-views").text(totalViewers+"  Watching now ("+(torrentData.numPeers)+" other peers)");
     
 
@@ -184,6 +186,9 @@ player.on('playing', event => {
 
 setInterval(function(){ 
   var totalViewers = (torrentData.numPeers - dedicatedSeedersCount) + 1;
+  if (totalViewers < 1) 
+    totalViewers = 1;
+  
   $("#live-vid-views").text(totalViewers+"  Watching now ("+(torrentData.numPeers)+" other peers)");
      }, 10000);
 
