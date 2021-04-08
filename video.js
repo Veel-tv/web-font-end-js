@@ -6,7 +6,8 @@
   var seedAllOptions = true; // Normally, Veel will check if all files are less than 500MB, if so, download all of them to help the network. But if user has limited internet, then we want to only download the selected quality file.
   var enableSeed = true; // Disable if user wants to save data (i.e on a mobile network plan)
   var muted = false;
-  var dedicatedSeedersCount = 4;
+  var dedicatedSeedersCount = 0;
+  var attemptingToLoad = false;
 
 var url_string = window.location.href
 var url = new URL(url_string);
@@ -101,8 +102,19 @@ if (vidId != "") {
     player.on('loadstart', event => {
     console.log("player is ready");
     /*Fixes bug where if a user clicked play too early (before it loaded) it would get stuck on "loading" mode*/
-    player.pause();
+    //player.pause();
     player.play();
+});
+
+player.on('seeked', event => {
+  console.log("seeked...");
+
+  if (attemptingToLoad) {
+    attemptingToLoad = false;
+    player.currentTime = player.currentTime-10;
+    player.play();
+  }
+  
 });
 
   player.on('waiting', event => {
@@ -136,8 +148,10 @@ player.on('playing', event => {
   player.currentTime = currentPos;
   checkInfo();
   player.volume = player.volume;
+  readyToPlay = true;
+  
 
-  if (firstAttemptToPlay) {
+  /*if (firstAttemptToPlay) {
     firstAttemptToPlay = false;
     player.currentTime = 10; //fixing a bug where the video just doesn't play
     setTimeout(function(){ player.currentTime = 0; }, 100);
@@ -156,13 +170,13 @@ player.on('playing', event => {
         clearInterval(retryPlay);
       }
      }, 500);
-  }
+  }*/
   
 
   console.log("on play: ")
   $("video").removeClass("player-loading");
   var totalViewers = (torrentData.numPeers - dedicatedSeedersCount) + 1;
-  $("#live-vid-views").text(totalViewers+"  Watching now ("+(torrentData.numPeers)+" peers)");
+  $("#live-vid-views").text(totalViewers+"  Watching now ("+(torrentData.numPeers)+" other peers)");
     
 
   console.log("num of peers: ",torrentData.numPeers)
@@ -170,7 +184,7 @@ player.on('playing', event => {
 
 setInterval(function(){ 
   var totalViewers = (torrentData.numPeers - dedicatedSeedersCount) + 1;
-  $("#live-vid-views").text(totalViewers+"  Watching now ("+(torrentData.numPeers)+" peers)");
+  $("#live-vid-views").text(totalViewers+"  Watching now ("+(torrentData.numPeers)+" other peers)");
      }, 10000);
 
 player.on('pause', event => {
@@ -184,8 +198,7 @@ player.on('pause', event => {
    console.log("client.downloadSpeed: ",bytesToSize(client.downloadSpeed));
 });
 
-$("video").removeAttr("controls");
-//$("video").css("width","100%");
+$("video").removeAttr("controls"); //FIX for Safari and other webkit browsers
 
         console.log("videoInfo: ",videoInfo);
 
@@ -256,8 +269,13 @@ $("video").removeAttr("controls");
         
 
         if (videoInfo.length == 1) {
-          var torrentId = videoInfo[0].magnet+"&xs=https://veel.tv/torrent-files/"+vidId+".torrent&ws=https://ws-au.veel.tv/ws/&ws=https://ws-us.veel.tv/ws/&ws=https://externos.io/veel/ws/&ws=https://veel.tv/ws/";
-          //https://veel.tv/ws/
+          dedicatedSeedersCount = videoInfo[0].webseeds.length;
+          webseedsString = "";
+          for (var i = 0; i < videoInfo[0].webseeds.length; i++) {
+            webseedsString += "&ws="+videoInfo[0].webseeds[i];
+          }
+
+          var torrentId = videoInfo[0].magnet+"&xs=https://veel.tv/torrent-files/"+vidId+".torrent"+webseedsString;
 
           client.processing = true;
 
@@ -275,12 +293,12 @@ $("video").removeAttr("controls");
     
 
     var totalViewers = (torrent.numPeers - dedicatedSeedersCount) + 1;
-  $("#live-vid-views").text(totalViewers+"  Watching now ("+(torrent.numPeers)+" peers)");
+  $("#live-vid-views").text(totalViewers+"  Watching now ("+(torrent.numPeers)+" other peers)");
 
     torrent.on('wire', function (wire) {
       console.log("new peer");
       var totalViewers = (torrent.numPeers - dedicatedSeedersCount) + 1;
-      $("#live-vid-views").text(totalViewers+"  Watching now ("+(torrent.numPeers)+" peers)");
+      $("#live-vid-views").text(totalViewers+"  Watching now ("+(torrent.numPeers)+" other peers)");
     });
     
 
@@ -307,7 +325,33 @@ $("video").removeAttr("controls");
       return file.name.indexOf(currentResolution_tmp) == 0;
     });
 
+    var lastReportedPos = 0;
+    var readyToPlay = false;
+    var firstAttempt = true;
+    retryPlay = setInterval(function(){
+      if (readyToPlay) {
+        //console.log("seek attempt player.paused: ",player.currentTime);
+        if (firstAttempt) {
+          lastReportedPos = player.currentTime;
+          firstAttempt = false;
+        } else if (lastReportedPos == player.currentTime && !player.paused && !attemptingToLoad) {
+          console.log("retry to play...");
+          attemptingToLoad = true;
+          player.currentTime = player.currentTime+10;
+          player.pause();
+        } else {
+          lastReportedPos = player.currentTime;
+        }
+        
+      }
+        
+      
+    }, 1000);
+
     torrent.on('download', function (bytes) {
+
+      
+
       $("video").css("width","");
       $("video").removeAttr("controls");
       if (resumePlayOnLoad) {
@@ -315,9 +359,11 @@ $("video").removeAttr("controls");
         console.log("currentPos: ",currentPos);
         //player.currentTime = currentPos;
         player.play();
-        player.currentTime = 10; //fixing a bug where the video just doesn't play
-        setTimeout(function(){ player.currentTime = 0; }, 1000); //fixing a bug where the video just doesn't play
+        //player.currentTime = 10; //fixing a bug where the video just doesn't play
+        //setTimeout(function(){ player.currentTime = 0; }, 1000); //fixing a bug where the video just doesn't play
         console.log('started', torrent.magnetURI);
+        
+        lastReportedPos = player.currentTime;
         //player.currentTime = currentPos;
         //setTimeout(function(){ player.play(); player.currentTime = currentPos; }, 1000);
 

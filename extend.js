@@ -74,7 +74,7 @@ var client = new WebTorrent();
         startPos = 0;
 
         if (isHome)
-          startPos = 8;
+          startPos = 8.5;
         else
           player.poster = "/thumbnails/"+videoInfo[0].id+"_720.jpg";
 
@@ -145,7 +145,12 @@ player.on('pause', event => {
         
 
         if (videoInfo.length == 1) {
-          var torrentId = videoInfo[0].magnet+"&xs=https://veel.tv/torrent-files/"+vidId+".torrent&ws=https://ws-au.veel.tv/ws/&ws=https://ws-us.veel.tv/ws/&ws=https://externos.io/veel/ws/&ws=https://veel.tv/ws/";
+          webseedsString = "";
+          for (var i = 0; i < videoInfo[0].webseeds.length; i++) {
+            webseedsString += "&ws="+videoInfo[0].webseeds[i];
+          }
+          
+          var torrentId = videoInfo[0].magnet+"&xs=https://veel.tv/torrent-files/"+vidId+".torrent"+webseedsString;
 
             client.add(torrentId, function(torrent) {
     // Deselect all files on initial download
