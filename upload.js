@@ -208,30 +208,110 @@ function selectThumbnailOptn(pos) {
   selectedThumbnail = pos;
 }
 
-function startBroadcasting() {
+function uploadVeels(veelId,files,token) {
+  var form_data = new FormData();
+  var xhr = new XMLHttpRequest();
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState == XMLHttpRequest.DONE) {
+        console.log("response: ",xhr.responseText);
+        //var response = JSON.parse(xhr.responseText);
+         
+    }
+}
+xhr.open("POST", "/upload_veel/index.php", true); 
+xhr.upload.addEventListener('progress', function(e){
+  if(e.lengthComputable){
+    var uploadPercent = e.loaded / e.total;
+    uploadPercent = (uploadPercent * 100);
+    console.log("upload percentage: ",uploadPercent);
+  }
+});
+
+form_data.append('token', token);
+
+console.log("files uploaded to server: ",files);
+
+for (var i = 0; i < files.length; i++) {
+  //files[i].path = veelId+"/"+files[i].path;
+  form_data.append('fileToUpload[]', files[i]);
+}
+     //form_data.append('fileToUpload[]', fileObj);
+xhr.send(form_data);
+}
+
+function startBroadcasting(veelId,token,vttData) {
+   
+
+  
   let files = [];
   //var Buffer = require('buffer');
   for (var i = 0; i < qualityOptions.length; i++) {
     let fileObj = new File([ffmpeg.FS('readFile', qualityOptions[i]+'.mp4')], qualityOptions[i]+'.mp4', {type: "video/mp4"});
+    fileObj.isFile = true;
+    fileObj.isDirectory = false;
+    fileObj.fullPath = "/"+veelId+"/"+qualityOptions[i]+'.mp4';
+    //fileObj.path = veelId+"/"+fileObj.path;
     files.push(fileObj);
   }
+
+  const preview_data = ffmpeg.FS('readFile', "preview.jpg");
+    const preview = new File([preview_data], "preview.jpg",{
+      type: "image/jpg",
+    });
+    preview.isFile = true;
+    preview.isDirectory = false;
+    preview.fullPath = "/"+veelId+"/preview.jpg";
+    files.push(preview);
+
+    const vttFile = new File([vttData], "preview.vtt",{
+      type: "text/plain",
+    });
+    vttFile.isFile = true;
+    vttFile.isDirectory = false;
+    vttFile.fullPath = "/"+veelId+"/preview.vtt";
+    files.push(vttFile);
 
   //let files = ffmpeg.FS('readdir', '/');
 
   console.log("files: ",files);
 
-  console.log("files to push: ",files)
+  console.log("files to push: ",files);
+ 
+  
   client.seed(files, function (torrent) {
     var totalFileSize = 0;
     console.log("seeding files: ",torrent.files);
       torrent.files.forEach(file => totalFileSize += file.length);
       totalFileSize = totalFileSize / Math.pow(1024,2);
     console.log('Client is seeding ' + torrent.magnetURI)
-    uploadMetadata(torrent.magnetURI,totalFileSize);
+    //uploadMetadata(torrent.magnetURI,totalFileSize,files,torrent.torrentFile);
+    uploadTorrentData(veelId,torrent.magnetURI,totalFileSize,token,torrent.torrentFile,files);
   })
 }
 
-function uploadMetadata(magent,size) {
+function uploadTorrentData(veelId,magent,size,token,torrentFile,files) {
+  var xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function() {
+      if (xhr.readyState == XMLHttpRequest.DONE) {
+        console.log("response: ",xhr.responseText);
+        var response = JSON.parse(xhr.responseText);
+        if (response.error == null) {
+          uploadVeels(veelId,files,token);
+      }
+    }
+    
+    
+}
+xhr.open("POST", "/add_torrent_data/index.php", true); 
+var form_data = new FormData();
+form_data.append('token', token);
+form_data.append('magnet', magent);
+  form_data.append('torrentFile', new File([torrentFile], "torrentFile.torrent"));
+  form_data.append('total_size', size);
+xhr.send(form_data);
+}
+
+function uploadMetadata() {
   console.log("uploading..");
     var xhr = new XMLHttpRequest();
     xhr.onreadystatechange = function() {
@@ -243,6 +323,8 @@ function uploadMetadata(magent,size) {
           var vtt_data = generate_vtt(videoLength,response.id,5,360,202.50,11);
           console.log("vtt_data: ",vtt_data);
           console.log("video url: https://veel.tv/video?v="+response.id);
+          //uploadVeels(response.id,files,response.tokenId);
+          startBroadcasting(response.id,response.tokenId,vtt_data);
           $(".base-close").hide();
           $(".base-size").text("Broadcasting your veel: 10%")
           $("#veelUrl").append('<a href="https://veel.tv/video?v='+response.id+'" target="_blank">https://veel.tv/video?v='+response.id+'</a>');
@@ -275,7 +357,8 @@ function uploadMetadata(magent,size) {
     }
 
     form_data.append('privacy', $("#e4").val());
-    form_data.append('magnet', magent);
+    //form_data.append('magnet', magent);
+    //form_data.append('torrentFile', new File([torrentFile], "torrentFile.torrent"));
     form_data.append('length', videoLength);
     form_data.append('supported_qualities', supportedQualities);
     form_data.append('fps', videoFps);
@@ -287,20 +370,20 @@ function uploadMetadata(magent,size) {
     form_data.append('intergrated_Ads', false);
     form_data.append('visibility', $('#e4').find(":selected").text());
     form_data.append('captions', '');
-    form_data.append('total_size', size);
+    //form_data.append('total_size', size);
     const thumbnail_data = ffmpeg.FS('readFile', thumbnails[selectedThumbnail]+".jpg");
-    const thumbnail = new File(thumbnail_data, "thumbnail.jpg",{
+    const thumbnail = new File([thumbnail_data], "thumbnail.jpg",{
       type: "image/jpg",
     });
     form_data.append('thumbnail', thumbnail);
     const thumbnail_lg_data = ffmpeg.FS('readFile', thumbnails[selectedThumbnail]+"_720.jpg");
-    const thumbnail_lg = new File(thumbnail_data, "thumbnail_lg.jpg",{
+    const thumbnail_lg = new File([thumbnail_data], "thumbnail_lg.jpg",{
       type: "image/jpg",
     });
     form_data.append('thumbnail_lg', thumbnail_lg);
 
     const preview_data = ffmpeg.FS('readFile', "preview.jpg");
-    const preview = new File(preview_data, "preview.jpg",{
+    const preview = new File([preview_data], "preview.jpg",{
       type: "image/jpg",
     });
     form_data.append('preview', preview);
